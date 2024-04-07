@@ -13,7 +13,7 @@ from ec_qaoa import find_ground_state
 import pennylane as qml
 import networkx as nx
 import pandas as pd
-# from rich_dataframe import prettify
+from rich_dataframe import prettify
 import os
 
 from functools import partial
@@ -258,6 +258,7 @@ def calc_EC(graph, subgraph, num_basis):
         try:
             # NOTE: Need this
             random_graphs = [graph.copy() for _ in range(num_basis)]
+            new_random_graphs = []
             for a, g in enumerate(random_graphs):
                 # add weights to the edges that are in graph but not in g, and add those edges to g
                 # NOTE: Need this
@@ -267,12 +268,14 @@ def calc_EC(graph, subgraph, num_basis):
                         g[u][v]['weight'] = a/(num_basis+1)
                     else:
                         g[u][v]['weight'] = 1
+                new_random_graphs.append(g)
 
                         # NOTE: Need this
-                        ec_hams = qml.matrix(qml.qaoa.maxcut(graph)[0])
-                        ground_states = np.array([find_ground_state(n_layers=1, graph=rg) for rg in random_graphs])
+            ec_hams = qml.matrix(qml.qaoa.maxcut(graph)[0])
+            ground_states = np.array([find_ground_state(n_layers=1, graph=rg)[0] for rg in new_random_graphs])
 
-                        evals, evec = get_new_evals(ec_hams, ground_states)
+            evals, evec = get_new_evals(ec_hams, ground_states)
+            break
 
             # NOTE: Need this
         except linalg.LinAlgError:
@@ -291,17 +294,19 @@ def calc_EC(graph, subgraph, num_basis):
         ec_maxcut = -1
     else:
         print("-------------This graph worked!------------")
-        ec_bit = f'{np.where(np.real(evec) == 1)[0][0]:0{8}b}'
-        ec_maxcut = bitsting_to_maxcut(ec_bit, graph)
+        # ec_bit = f'{np.where(np.real(evec) == 1)[0][0]:0{8}b}'
+        # ec_maxcut = bitsting_to_maxcut(ec_bit, graph)
 
-    qaoa_bit = f'{np.where(np.real(find_ground_state(1, graph=graph)) == 1)[0][0]:0{8}b}'
-    val, cut = nx.algorithms.approximation.maxcut.one_exchange(graph)
-    class_bit = ''.join(['1' if i in cut[0] else '0' for i in range(8)])
+    # qaoa_bit = f'{np.where(np.real(find_ground_state(1, graph=graph)[1]) == 1)[0][0]:0{8}b}'
+    # val, cut = nx.algorithms.approximation.maxcut.one_exchange(graph)
+    # class_bit = ''.join(['1' if i in cut[0] else '0' for i in range(8)])
 
-    qaoa_maxcut = bitsting_to_maxcut(qaoa_bit, graph)
-    class_maxcut = bitsting_to_maxcut(class_bit, graph)
+    # qaoa_maxcut = bitsting_to_maxcut(qaoa_bit, graph)
+    # class_maxcut = bitsting_to_maxcut(class_bit, graph)
 
-    return evals, evec, ec_bit, qaoa_bit, class_bit, ec_maxcut, qaoa_maxcut, class_maxcut
+    # return evals, evec, ec_bit, qaoa_bit, class_bit, ec_maxcut, qaoa_maxcut, class_maxcut
+    qaoa_vec = find_ground_state(1, graph=graph)[0]
+    return evals, evec, qaoa_vec #ec_bit, class_bit, ec_maxcut, class_maxcut
 
 #|%%--%%| <dniHaFRu2G|A6avno1hYp>
 
@@ -319,16 +324,18 @@ class Worker_EC():
         graph = self.reader(paths[0])
         subgraph = self.reader(paths[1])
 
-        evals, evec, ec_bit, qaoa_bit, class_bit, ec_maxcut, qaoa_maxcut, class_maxcut = calc_EC(graph, subgraph, self.num_basis)
+        # evals, evec, ec_bit, qaoa_bit, class_bit, ec_maxcut, qaoa_maxcut, class_maxcut = calc_EC(graph, subgraph, self.num_basis)
+        evals, evec, qaoa_vec = calc_EC(graph, subgraph, self.num_basis)
 
         series['evals'] = evals
         series['evec'] = evec
-        series['ec_bit'] = ec_bit
-        series['qaoa_bit'] = qaoa_bit
-        series['class_bit'] = class_bit
-        series['ec_maxcut'] = ec_maxcut
-        series['qaoa_maxcut'] = qaoa_maxcut
-        series['class_maxcut'] = class_maxcut
+        series['qaoa_vec'] = qaoa_vec
+        # series['ec_bit'] = ec_bit
+        # series['qaoa_bit'] = qaoa_bit
+        # series['class_bit'] = class_bit
+        # series['ec_maxcut'] = ec_maxcut
+        # series['qaoa_maxcut'] = qaoa_maxcut
+        # series['class_maxcut'] = class_maxcut
         return series
 
 
@@ -364,8 +371,7 @@ def run_ec_parallel():
         convergence_threshold = 1e-4
 
         # NOTE: change these paths on server
-        # data_path = '/home/agwilkie/papers/random_circuit/MA-QAOA/graphs/main/all_8/'
-        data_path = './graphs/main/all_8/'
+        data_path = '/home/agwilkie/papers/random_circuit/MA-QAOA/graphs/main/all_8/'
         out_path = f'results_{num_basis}.csv'
 
         init_dataframe(data_path, out_path)
@@ -415,6 +421,84 @@ if __name__ == '__main__':
     # for g in range(11117):
     #     remove_max_degree_edge(g)
     #     print(f'g = {g}')
-    run_ec_parallel()
+    # run_ec_parallel()
 
 
+#|%%--%%| <9U1tdTTr8C|n0R2H72qsl>
+r"""°°°
+Plot results
+°°°"""
+#|%%--%%| <n0R2H72qsl|mIiYUVa7pQ>
+
+result_filename = f'/home/vilcius/Papers/angle_analysis_ma_qaoa/code/Angle-Rounding-QAOA/result_analysis/QAOA_dat.csv'
+df_filename = '/home/vilcius/Papers/angle_analysis_ma_qaoa/code/Angle-Rounding-QAOA/result_analysis/qaoa.csv'
+
+if os.path.exists(df_filename):
+    qaoa_df = pd.read_csv(df_filename)
+else:
+    qaoa_df = pd.read_csv(result_filename)
+    qaoa_df['graph_num'] = qaoa_df['path'].str.extract(r'graph_(\d+)')
+    qaoa_df['graph_num'] = qaoa_df['graph_num'].astype(int)
+    qaoa_df.set_index('graph_num', inplace=True)
+    # qaoa_df['case'] = qaoa_df['random_path'].str.extract(r'(\w+).gml')
+    qaoa_df.to_csv(df_filename, index=False)
+
+results_2 = pd.read_csv('results_2.csv')
+results_2['graph_num'] = results_2['path'].str.extract(r'graph_(\d+)')
+results_2['graph_num'] = results_2['graph_num'].astype(int)
+results_eval_2 = results_2[['graph_num', 'evals']].rename(columns={'evals': 'evals_2'})
+results_eval_2.set_index('graph_num', inplace=True)
+results_eval_2['evals_2'] = results_eval_2['evals_2'].apply(lambda x: -np.round(np.fromstring(x[1:-1], sep=' '), 3)[0])
+
+results_3 = pd.read_csv('results_3.csv')
+results_3['graph_num'] = results_3['path'].str.extract(r'graph_(\d+)')
+results_3['graph_num'] = results_3['graph_num'].astype(int)
+results_eval_3 = results_3[['graph_num', 'evals']].rename(columns={'evals': 'evals_3'})
+results_eval_3.set_index('graph_num', inplace=True)
+results_eval_3['evals_3'] = results_eval_3['evals_3'].apply(lambda x: -np.round(np.fromstring(x[1:-1], sep=' '), 3)[0])
+
+results_4 = pd.read_csv('results_4.csv')
+results_4['graph_num'] = results_4['path'].str.extract(r'graph_(\d+)')
+results_4['graph_num'] = results_4['graph_num'].astype(int)
+results_eval_4 = results_4[['graph_num', 'evals']].rename(columns={'evals': 'evals_4'})
+results_eval_4.set_index('graph_num', inplace=True)
+results_eval_4['evals_4'] = results_eval_4['evals_4'].apply(lambda x: -np.round(np.fromstring(x[1:-1], sep=' '), 3)[0])
+
+results_5 = pd.read_csv('results_5.csv')
+results_5['graph_num'] = results_5['path'].str.extract(r'graph_(\d+)')
+results_5['graph_num'] = results_5['graph_num'].astype(int)
+results_eval_5 = results_5[['graph_num', 'evals']].rename(columns={'evals': 'evals_5'})
+results_eval_5.set_index('graph_num', inplace=True)
+results_eval_5['evals_5'] = results_eval_5['evals_5'].apply(lambda x: -np.round(np.fromstring(x[1:-1], sep=' '), 3)[0])
+
+
+results_evals = pd.concat([results_eval_2, results_eval_3, results_eval_4, results_eval_5, qaoa_df['C']], axis=1).dropna()
+prettify(results_evals.tail(50), row_limit=50)
+
+#|%%--%%| <mIiYUVa7pQ|dM5zvHziDt>
+
+
+def make_plot(results_evals, graph_num):
+    # x axis is the number of basis states (2, 3, 4, 5)
+    # y axis is the energy
+    # horizontal line is the QAOA energy
+    
+    x = [2, 3, 4, 5]
+    y = results_evals.loc[graph_num].values[:-1]
+    COLOR = 'black'
+    plt.rcParams['text.color'] = COLOR
+    plt.rcParams['axes.labelcolor'] = COLOR
+    plt.rcParams['xtick.color'] = COLOR
+    plt.rcParams['ytick.color'] = COLOR
+    plt.plot(x, y, marker='o')
+    plt.axhline(results_evals.loc[graph_num, 'C'], color='r')
+    plt.xlabel('Number of basis states')
+    plt.ylabel('Energy')
+    plt.title(f'Graph {graph_num}', color=COLOR)
+    plt.savefig(f'plots/graph_{graph_num}.png')
+    plt.close()
+
+    # plt.show()
+
+for i in list(results_evals.index):
+    make_plot(results_evals, i)

@@ -44,6 +44,11 @@ def find_ground_state(n_layers, graph=None, hamiltonian=None):
         return qml.counts()
 
     @qml.qnode(dev_e)
+    def qaoa_state(params, n_layers, graph=None, hamiltonian=None):
+        qaoa_ec(params, n_layers, graph, hamiltonian)
+        return qml.state()
+
+    @qml.qnode(dev_e)
     def get_state(gs):
         qml.BasisState(gs, wires=range(n_qubits))
         return qml.state()
@@ -107,9 +112,11 @@ def find_ground_state(n_layers, graph=None, hamiltonian=None):
 
     counts = qaoa_counts(opt_params, n_layers, graph, hamiltonian)
     opt_cut = max(counts, key=counts.get)
-    ground_state = get_state(np.array([eval(i) for i in opt_cut], requires_grad=False))
 
-    return ground_state
+    ground_state = qaoa_state(opt_params, n_layers, graph, hamiltonian)
+    bit = get_state(np.array([eval(i) for i in opt_cut], requires_grad=False))
+
+    return ground_state, bit
 
 # gs = find_ground_state(1, graph=nx.cycle_graph(8))
 # print(gs)
