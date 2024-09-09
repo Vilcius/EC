@@ -13,8 +13,9 @@ from ec_qaoa import find_ground_state
 import pennylane as qml
 import networkx as nx
 import pandas as pd
-from rich_dataframe import prettify
+# from rich_dataframe import prettify
 import os
+import matplotlib.pyplot as plt
 
 from functools import partial
 from os import path
@@ -238,7 +239,7 @@ def bitsting_to_maxcut(bitstring, graph):
 
 def init_dataframe(data_path: str, out_path: str):
     paths = [(f'{data_path}graph_{i}/{i}.gml', f'{data_path}graph_{i}/remove_triangle/all.gml')
-            for i in range(11117) if path.exists(f'{data_path}graph_{i}/remove_triangle/all.gml')]
+             for i in range(11117) if path.exists(f'{data_path}graph_{i}/remove_triangle/all.gml')]
     index = pd.MultiIndex.from_tuples(paths, names=["path", "triangle_free_path"])
     df = pd.DataFrame(index=index)
 
@@ -257,7 +258,7 @@ def calc_EC(graph, subgraph, num_basis):
     while i < 5:
         try:
             # NOTE: Need this
-            random_graphs = [graph.copy() for _ in range(num_basis)]
+            random_graphs = [subgraph.copy() for _ in range(num_basis)]
             new_random_graphs = []
             for a, g in enumerate(random_graphs):
                 # add weights to the edges that are in graph but not in g, and add those edges to g
@@ -270,7 +271,7 @@ def calc_EC(graph, subgraph, num_basis):
                         g[u][v]['weight'] = 1
                 new_random_graphs.append(g)
 
-                        # NOTE: Need this
+                # NOTE: Need this
             ec_hams = qml.matrix(qml.qaoa.maxcut(graph)[0])
             ground_states = np.array([find_ground_state(n_layers=1, graph=rg)[0] for rg in new_random_graphs])
 
@@ -306,7 +307,7 @@ def calc_EC(graph, subgraph, num_basis):
 
     # return evals, evec, ec_bit, qaoa_bit, class_bit, ec_maxcut, qaoa_maxcut, class_maxcut
     qaoa_vec = find_ground_state(1, graph=graph)[0]
-    return evals, evec, qaoa_vec #ec_bit, class_bit, ec_maxcut, class_maxcut
+    return evals, evec, qaoa_vec  # ec_bit, class_bit, ec_maxcut, class_maxcut
 
 #|%%--%%| <dniHaFRu2G|A6avno1hYp>
 
@@ -340,7 +341,7 @@ class Worker_EC():
 
 
 def optimize_ec_parallel(dataframe_path: str, rows_func: callable, num_workers: int, worker: Worker_EC):
-    df = pd.read_csv(dataframe_path, index_col=[0,1])
+    df = pd.read_csv(dataframe_path, index_col=[0, 1])
     selected_rows = rows_func(df)
     rows_to_process = list(df.loc[selected_rows, :].iterrows())
     # print(rows_to_process)
@@ -358,7 +359,7 @@ def optimize_ec_parallel(dataframe_path: str, rows_func: callable, num_workers: 
             for result in tqdm(pool.imap(worker.process_entry, rows_to_process), total=len(rows_to_process), smoothing=0, ascii=' █'):
                 results.append(result)
 
-    df = pd.concat((pd.DataFrame(results), remaining_rows))#.sort_index(key=natsort_keygen())
+    df = pd.concat((pd.DataFrame(results), remaining_rows))  # .sort_index(key=natsort_keygen())
     df.index.names = ['path', 'triangle_free_path']
     df.to_csv(dataframe_path)
 
@@ -430,8 +431,10 @@ Plot results
 °°°"""
 #|%%--%%| <n0R2H72qsl|mIiYUVa7pQ>
 
-result_filename = f'/home/vilcius/Papers/angle_analysis_ma_qaoa/code/Angle-Rounding-QAOA/result_analysis/QAOA_dat.csv'
-df_filename = '/home/vilcius/Papers/angle_analysis_ma_qaoa/code/Angle-Rounding-QAOA/result_analysis/qaoa.csv'
+# result_filename = f'/home/vilcius/Papers/angle_analysis_ma_qaoa/code/Angle-Rounding-QAOA/result_analysis/QAOA_dat.csv'
+# df_filename = '/home/vilcius/Papers/angle_analysis_ma_qaoa/code/Angle-Rounding-QAOA/result_analysis/qaoa.csv'
+result_filename = f'/home/agwilkie/papers/angle_rounding/code/Angle-Rounding-QAOA/result_analysis/QAOA_dat.csv'
+df_filename = '/home/agwilkie/papers/angle_rounding/code/Angle-Rounding-QAOA/result_analysis/qaoa.csv'
 
 if os.path.exists(df_filename):
     qaoa_df = pd.read_csv(df_filename)
@@ -473,7 +476,7 @@ results_eval_5['evals_5'] = results_eval_5['evals_5'].apply(lambda x: -np.round(
 
 
 results_evals = pd.concat([results_eval_2, results_eval_3, results_eval_4, results_eval_5, qaoa_df['C']], axis=1).dropna()
-prettify(results_evals.tail(50), row_limit=50)
+# prettify(results_evals.tail(50), row_limit=50)
 
 #|%%--%%| <mIiYUVa7pQ|dM5zvHziDt>
 
@@ -482,7 +485,7 @@ def make_plot(results_evals, graph_num):
     # x axis is the number of basis states (2, 3, 4, 5)
     # y axis is the energy
     # horizontal line is the QAOA energy
-    
+
     x = [2, 3, 4, 5]
     y = results_evals.loc[graph_num].values[:-1]
     COLOR = 'black'
